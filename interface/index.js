@@ -7,11 +7,6 @@ const T = {
     tmp.innerHTML = this.master.content.querySelector('table tr.file-row').outerHTML;
     return tmp.content;
   },
-  pathRow: function () {
-    const tmp = document.createElement('template');
-    tmp.innerHTML = this.master.content.querySelector('table tr.path-row').outerHTML;
-    return tmp.content;
-  },
   uploadLoading: function () {
     const tmp = document.createElement('template');
     tmp.innerHTML = this.master.content.querySelector('.upload-loading').outerHTML;
@@ -99,39 +94,18 @@ const Dialog = {
   }
 };
 
-async function requestGet (url, data) {
+async function requestPost (url, param) {
   return new Promise((resolve, reject) => {
-    let req = new XMLHttpRequest();
-    let realUrl = url;
-    if (IS_DEV) realUrl = "/puteros" + url;
-    if (data) {
-      let urlParams = new URLSearchParams(data);
-      realUrl += "?" + urlParams.toString();
+    let fd = new FormData();
+    for (let key in param) {
+      fd.append(key, param[key]);
     }
-    req.open("GET", realUrl, true);
-    req.onload = () => {
-      if (req.status >= 200 && req.status < 300) {
-        resolve(req.responseText);
-      } else {
-        reject(new Error(`Request failed with status ${req.status}`));
-      }
-    };
-    req.onerror = () => {
-      reject(new Error("Network error"))
-    };
-    req.send();
-  });
-}
 
-async function requestPost (url, data) {
-  return new Promise((resolve, reject) => {
-    if (typeof data === "object" && data.length !== undefined) {
-      data = data.join("\n");
-    }
     let realUrl = url;
     if (IS_DEV) realUrl = "/puteros" + url;
     let req = new XMLHttpRequest();
     req.open("POST", realUrl, true);
+    req.withCredentials = true;
     req.onload = () => {
       if (req.status >= 200 && req.status < 300) {
         resolve(req.responseText);
@@ -140,8 +114,7 @@ async function requestPost (url, data) {
       }
     };
     req.onerror = () => reject(new Error("Network error"));
-    req.setRequestHeader("Content-Type", "text/plain");
-    req.send(data);
+    req.send(fd);
   });
 }
 
@@ -196,8 +169,8 @@ async function uploadFile () {
   if (_queueUpload.length === 0) {
     _runningUpload = false;
     $(".dialog.upload .dialog-body").innerHTML = "";
-    fetchSystemInfo();
-    fetchFiles(currentDrive, currentPath);
+    await fetchSystemInfo();
+    await fetchFiles(currentPath);
     Dialog.hide();
     return;
   }
@@ -303,7 +276,7 @@ async function fetchFiles(path) {
   $(`.act-browse.active`)?.classList.remove("active");
   $(".current-path").textContent = "SDCard:/" + path;
   Dialog.loading.show('Fetching files...');
-  let req = await requestPost("/", ["ls", path]);
+  let req = await requestPost("/", {command: "ls", path});
   renderFileRow(req);
   Dialog.loading.hide();
 }
@@ -320,7 +293,7 @@ function formatBytes(bytes) {
 
 async function fetchSystemInfo() {
   Dialog.loading.show('Fetching system info...');
-  let req = await requestPost("/", "sysinfo");
+  let req = await requestPost("/", {command: "sysinfo"});
   let data = req.split("\n");
   let usedSpace = parseInt(data[2].split(":")[1]);
   let totalSpace = parseInt(data[3].split(":")[1]);
@@ -335,11 +308,7 @@ async function saveEditorFile() {
   if (isModified(editor)) {
     $(".act-save-edit-file").disabled = true;
     editor.setAttribute("data-hash", calcHash(editor.value));
-    await requestPost("/edit", {
-      fs: currentDrive,
-      name: filename,
-      content: editor.value
-    });
+    await requestPost("/", {command: "echo", path: filename, content: editor.value});
   }
 
   Dialog.loading.hide();
@@ -349,77 +318,6 @@ function isModified(target) {
   let oldHash = target.getAttribute("data-hash");
   let newHash = calcHash(target.value);
   return oldHash !== newHash;
-}
-
-async function openNavigator() {
-  Dialog.show('navigator');
-  await reloadScreen();
-  autoReloadScreen();
-}
-
-let SCREEN_NAVIGATING = false;
-async function runNavigation(direction) {
-  if (SCREEN_NAVIGATING) return;
-  SCREEN_NAVIGATING = true;
-  try {
-    drawCanvasLoading();
-    await requestPost("/cm", { cmnd: `nav ${direction.toLowerCase()}` });
-    await reloadScreen();
-  } catch (error) {
-    alert("Failed to run command: " + error.message);
-    console.error(error)
-  } finally {
-    SCREEN_NAVIGATING = false;
-  }
-}
-
-const btnForceReload = $("#force-reload");
-let SCREEN_RELOAD = false;
-async function reloadScreen() {
-  if (SCREEN_RELOAD) return;
-  SCREEN_RELOAD = true;
-  btnForceReload.classList.add("reloading");
-  try {
-    let screenReq = await requestGet("/getscreen");
-    let screenData = JSON.parse(screenReq);
-    await renderTFT(screenData);
-  } catch (error) {
-    console.error("Failed to reload screen:", error);
-    alert("Failed to reload screen: " + error.message);
-  } finally {
-    btnForceReload.classList.remove("reloading");
-    SCREEN_RELOAD = false;
-  }
-}
-
-const eConfigAutoReload = $("#navigator-auto-reload");
-let AUTO_RELOAD_SCREEN = null;
-async function taskReloader() {
-  let timer = parseInt(eConfigAutoReload.value);
-  let navigatorOpen = $(".dialog.navigator:not(.hidden)");
-  if (timer <= 0 || !navigatorOpen) {
-    if (AUTO_RELOAD_SCREEN) {
-      clearTimeout(AUTO_RELOAD_SCREEN);
-      AUTO_RELOAD_SCREEN = null;
-    }
-
-    return;
-  }
-
-
-  await reloadScreen();
-  setTimeout(taskReloader, timer);
-  // better use setTimeout instead of setInterval to avoid overlapping calls
-}
-async function autoReloadScreen() {
-  let timer = parseInt(eConfigAutoReload.value);
-
-  if (AUTO_RELOAD_SCREEN) {
-    clearTimeout(AUTO_RELOAD_SCREEN);
-    AUTO_RELOAD_SCREEN = null;
-  }
-
-  if (timer > 0) taskReloader();
 }
 
 window.ondragenter = () => $(".upload-area").classList.remove("hidden");
@@ -480,7 +378,7 @@ $(".container").addEventListener("click", async (e) => {
 
     // Load file content
     Dialog.loading.show('Fetching content...');
-    let r = await requestPost("/", ["cat", file]);
+    let r = await requestPost("/", {command: "cat", path: file});
     editor.value = r;
     editor.setAttribute("data-hash", calcHash(r));
 
@@ -527,8 +425,8 @@ $(".container").addEventListener("click", async (e) => {
     if (!confirm(`Are you sure you want to DELETE ${file}?\n\nTHIS ACTION CANNOT BE UNDONE!`)) return;
 
     Dialog.loading.show('Deleting...');
-    await requestPost("/", ['rm', file]);
-    fetchSystemInfo();
+    await requestPost("/", {command: "rm", path: file});
+    await fetchSystemInfo();
     await fetchFiles(currentPath);
     Dialog.loading.hide();
     return;
@@ -563,61 +461,58 @@ $(".act-save-oinput-file").addEventListener("click", async (e) => {
   if (actionType.startsWith("rename")) {
     Dialog.loading.show('Renaming...');
     let destPath = path.substring(0, path.lastIndexOf("/") + 1) + fileName;
-    await requestPost("/", ['mv', path, destPath]);
+    await requestPost("/", {command: "mv", src: path, dst: destPath});
   } else if (actionType === "createFolder") {
     Dialog.loading.show('Creating Folder...');
-    await requestPost("/", ['mkdir', path.trimEnd("/") + "/" + fileName]);
+    await requestPost("/", {command: "mkdir", path: path.trimEnd("/") + "/" + fileName});
   } else if (actionType === "createFile") {
     Dialog.loading.show('Creating File...');
-    await requestPost("/", ['touch', path.trimEnd("/") + "/" + fileName]);
+    await requestPost("/", {command: "touch", path: path.trimEnd("/") + "/" + fileName});
   }
 
   if (refreshList) fetchFiles(currentPath);
   Dialog.hide();
 });
 
-$(".act-save-credential").addEventListener("click", async (e) => {
-  let username = $("#cred-username").value.trim();
-  let password = $("#cred-password").value.trim();
-  if (!username || !password) {
-    alert("Username and password cannot be empty.");
-    return;
-  }
-
-  Dialog.loading.show('Saving WiFi Credentials...');
-  await requestGet("/wifi", {
-    usr: username,
-    pwd: password
-  });
-  Dialog.loading.hide();
-  alert("Credentials saved successfully!");
-});
-
 $(".act-save-edit-file").addEventListener("click", async (e) => {
   await saveEditorFile();
 });
 
-$(".act-reboot").addEventListener("click", async (e) => {
-  e.preventDefault();
-  if (!confirm("Are you sure you want to REBOOT the device?")) return;
-  Dialog.loading.show('Rebooting...');
-  await requestGet("/reboot");
-  setTimeout(() => {
-    location.reload();
-  }, 1000);
-});
-
-$(".navigator-canvas").addEventListener("click", async (e) => {
-  let nav = e.target.matches(".nav") ? e.target : e.target.closest(".nav");
-  if (nav === null) return;
-
-  let direction = nav.getAttribute("data-direction");
-  if (direction === "Menu") {
-    direction = "Sel 500";
+$(".act-auth-login").addEventListener("click", async (e) => {
+  let pass = $("#auth-password").value;
+  if (!pass) {
+    alert("Password cannot be empty.");
+    return;
   }
 
-  await runNavigation(direction.toLowerCase());
+  Dialog.loading.show('Authenticating...');
+  try {
+    await requestPost("/", {command: "sudo", param: pass});
+    Dialog.hide();
+    fetchSystemInfo();
+    fetchFiles("/");
+  } catch (error) {
+    alert("Authentication error: " + error.message);
+    console.error("Authentication error:", error);
+  } finally {
+    Dialog.loading.hide();
+  }
 });
+
+$("#act-btn-logout").addEventListener("click", async (e) => {
+  if (!confirm("Are you sure you want to logout?")) return;
+
+  Dialog.loading.show('Logging out...');
+  try {
+    await requestPost("/", {command: "exit"});
+    Dialog.show("auth");
+  } catch (error) {
+    alert("Logout error: " + error.message);
+    console.error("Logout error:", error);
+  } finally {
+    Dialog.loading.hide();
+  }
+})
 
 window.addEventListener("keydown", async (e) => {
   let key = e.key.toLowerCase()
@@ -627,39 +522,6 @@ window.addEventListener("keydown", async (e) => {
       e.stopImmediatePropagation();
 
       await saveEditorFile();
-    } else if (e.altKey && key === "enter") {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-
-      await saveEditorFile(true);
-    }
-  }
-
-  if ($(".dialog.navigator:not(.hidden)")) {
-    const map_navigator = {
-      "arrowup": "Up",
-      "arrowdown": "Down",
-      "arrowleft": "Prev",
-      "arrowright": "Next",
-      "enter": "Sel",
-      "backspace": "Esc",
-      "m": "Menu",
-      "pageup": "NextPage",
-      "pagedown": "PrevPage",
-    };
-
-    if (key === 'r') {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      reloadScreen();
-      return;
-    }
-
-    if (key in map_navigator) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      $(`.navigator-canvas .nav[data-direction="${map_navigator[key]}"]`).click();
-      return;
     }
   }
 
@@ -680,7 +542,6 @@ window.addEventListener("keydown", async (e) => {
 });
 
 $(".file-content").addEventListener("keyup", function (e) {
-
   if ($(".dialog.editor:not(.hidden)")) {
     // map special characters to their closing pair
     map_chars = {
@@ -708,6 +569,11 @@ $(".file-content").addEventListener("keyup", function (e) {
 });
 
 (async function () {
-  await fetchSystemInfo();
-  await fetchFiles("/");
+  try {
+    await fetchSystemInfo();
+    await fetchFiles("/");
+  } catch (e) {
+    Dialog.loading.hide();
+    Dialog.show("auth");
+  }
 })();

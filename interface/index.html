@@ -154,7 +154,7 @@
     <div class="dialog setting hidden">
       <div class="dialog-head">Settings</div>
       <div class="dialog-body">
-        <button onclick="window.location.href='/logout'" class="btn-action">Log Out</button>
+        <button id="act-btn-logout" class="btn-action">Log Out</button>
       </div>
       <div class="dialog-footer">
         <button class="btn-action act-dialog-close act-escape">Close</button>
@@ -183,6 +183,18 @@
       <div class="dialog-footer">
         <button class="btn-action act-save-oinput-file">Save</button>
         <button class="btn-action act-dialog-close act-escape">Close</button>
+      </div>
+    </div>
+    <div class="dialog auth hidden">
+      <div class="dialog-head">
+        <span class="oinput-title">Authentication</span>
+      </div>
+      <div class="dialog-body">
+        <label for="oinput-input" class="oinput-label">Password:</label>
+        <input type="text" id="auth-password">
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-auth-login">Login</button>
       </div>
     </div>
     <div class="dialog editor hidden">

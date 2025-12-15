@@ -41,8 +41,12 @@ http.createServer((req, res) => {
     });
 
     proxyReq.on('error', err => {
-      res.writeHead(502, {'Content-Type': 'text/plain'});
-      res.end('Proxy error: ' + err.message);
+      if (!res.headersSent) {
+        res.writeHead(502, {'Content-Type': 'text/plain'});
+        res.end('Proxy error: ' + err.message);
+      } else {
+        res.end();
+      }
     });
 
     // Pipe the request body to the proxy request
