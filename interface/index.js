@@ -274,7 +274,7 @@ let currentPath;
 async function fetchFiles(path) {
   currentPath = path;
   $(`.act-browse.active`)?.classList.remove("active");
-  $(".current-path").textContent = "SDCard:/" + path;
+  $(".current-path").textContent = "Storage:/" + path;
   Dialog.loading.show('Fetching files...');
   let req = await requestPost("/", {command: "ls", path});
   renderFileRow(req);
