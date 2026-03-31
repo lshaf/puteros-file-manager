@@ -22,7 +22,7 @@ if (!fs.existsSync(mainFolderPath) || !fs.statSync(mainFolderPath).isDirectory()
 }
 
 http.createServer((req, res) => {
-  if ((req.url.startsWith('/puteros/'))) {
+  if (req.url.startsWith('/puteros/') || req.url.startsWith('/theme.css')) {
     let realUrl = req.url.replace('/puteros/', '/');
     const url = new URL(targetDomain + realUrl);
 
