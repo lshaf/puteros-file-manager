@@ -337,6 +337,17 @@ svg > g, svg > path {
 .dialog.upload .dialog-body {
     padding: 10px;
 }
+.dialog.upload {
+    width: 100%;
+    max-width: 420px;
+    max-height: calc(100vh - 20px);
+    display: flex;
+    flex-direction: column;
+}
+.dialog.upload .dialog-body {
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
+}
 .dialog.upload .upload-loading {
     width: 350px;
     border: 1px solid var(--color);

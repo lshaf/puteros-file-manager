@@ -525,6 +525,32 @@ window.addEventListener("keydown", async (e) => {
     }
   }
 
+  if (key === "enter" && $(".dialog-background:not(.hidden)")) {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+    let activeDialog = $(".dialog:not(.hidden)");
+    if (!activeDialog) return;
+
+    let activeElement = document.activeElement;
+    if (!activeDialog.contains(activeElement) || activeElement.tagName !== "INPUT") return;
+
+    let inputs = Array.from(activeDialog.querySelectorAll("input:not([type='hidden']):not([disabled]):not([readonly])"));
+    if (inputs.length === 0) return;
+
+    e.preventDefault();
+    let currentIndex = inputs.indexOf(activeElement);
+    if (currentIndex >= 0 && currentIndex < inputs.length - 1) {
+      inputs[currentIndex + 1].focus();
+      return;
+    }
+
+    let submitButton = activeDialog.querySelector(
+      ".act-save-oinput-file:not(:disabled), .act-auth-login:not(:disabled), .dialog-footer button:not(.act-dialog-close):not(:disabled)"
+    );
+    if (submitButton) submitButton.click();
+    return;
+  }
+
   if (key === "escape" && $(".dialog-background:not(.hidden)")) {
     if ($(".dialog.editor:not(.hidden)")) {
       let editor = $(".dialog.editor .file-content");

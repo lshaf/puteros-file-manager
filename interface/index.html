@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geek File Manager</title>
   <link rel="stylesheet" href="/index.css">
-  <link rel="stylesheet" href="/theme.css">
+  <link rel="stylesheet" href="/puteros/theme.css">
 </head>
 
 <body>
@@ -16,7 +16,7 @@
         <span class="title" onclick="Dialog.show('info')">Geek File Manager [<span class="puteros-version">beta</span>]</span>
       </div>
       <div class="right-part">
-        <button class="btn-action" onclick="Dialog.show('setting')">Setting</button>
+        <button id="act-btn-logout" class="btn-action">Logout</button>
       </div>
     </div>
     <div class="free-space">
@@ -41,7 +41,7 @@
       </span>
       <div class="body-actions">
         <button class="icon-action" title="Upload files to current folder">
-          <input type='file' class="inp-uploader" multiple>
+          <input type='file' class="inp-uploader" multiple autocomplete="off">
           <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24">
             <path fill="#02de02" fill-rule="evenodd"
               d="M4.25 5A2.75 2.75 0 0 1 7 2.25h7.987a1.75 1.75 0 0 1 1.421.73l3.014 4.197c.213.298.328.655.328 1.02V19A2.75 2.75 0 0 1 17 21.75H7A2.75 2.75 0 0 1 4.25 19V5ZM7 3.75c-.69 0-1.25.56-1.25 1.25v14c0 .69.56 1.25 1.25 1.25h10c.69 0 1.25-.56 1.25-1.25V8.897H15a.75.75 0 0 1-.75-.75V3.75H7Z"
@@ -51,7 +51,7 @@
           </svg>
         </button>
         <button class="icon-action" title="Upload folder to current folder">
-          <input type='file' class="inp-uploader" webkitdirectory directory multiple>
+          <input type='file' class="inp-uploader" webkitdirectory directory multiple autocomplete="off">
           <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24">
             <path fill="#02de02"
               d="M12.71 10.79a1 1 0 0 0-.33-.21a1 1 0 0 0-.76 0a1 1 0 0 0-.33.21l-2 2a1 1 0 0 0 1.42 1.42l.29-.3v2.59a1 1 0 0 0 2 0v-2.59l.29.3a1 1 0 0 0 1.42 0a1 1 0 0 0 0-1.42ZM19 5.5h-6.28l-.32-1a3 3 0 0 0-2.84-2H5a3 3 0 0 0-3 3v13a3 3 0 0 0 3 3h14a3 3 0 0 0 3-3v-10a3 3 0 0 0-3-3Zm1 13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-13a1 1 0 0 1 1-1h4.56a1 1 0 0 1 .95.68l.54 1.64a1 1 0 0 0 .95.68h7a1 1 0 0 1 1 1Z" />
@@ -152,15 +152,6 @@
       <div class="dialog-head">Uploading</div>
       <div class="dialog-body"></div>
     </div>
-    <div class="dialog setting hidden">
-      <div class="dialog-head">Settings</div>
-      <div class="dialog-body">
-        <button id="act-btn-logout" class="btn-action">Log Out</button>
-      </div>
-      <div class="dialog-footer">
-        <button class="btn-action act-dialog-close act-escape">Close</button>
-      </div>
-    </div>
     <div class="dialog info hidden">
       <div class="dialog-head">Info</div>
       <div class="dialog-body">
@@ -179,7 +170,7 @@
       </div>
       <div class="dialog-body">
         <label for="oinput-input" class="oinput-label">New name:</label>
-        <input type="text" id="oinput-input">
+        <input type="text" id="oinput-input" autocomplete="off">
       </div>
       <div class="dialog-footer">
         <button class="btn-action act-save-oinput-file">Save</button>
@@ -192,7 +183,7 @@
       </div>
       <div class="dialog-body">
         <label for="oinput-input" class="oinput-label">Password:</label>
-        <input type="text" id="auth-password">
+        <input type="text" id="auth-password" autocomplete="off">
       </div>
       <div class="dialog-footer">
         <button class="btn-action act-auth-login">Login</button>
