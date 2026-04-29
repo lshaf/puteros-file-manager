@@ -2,6 +2,7 @@
     --color: #0040e3;
     --background: #242424;
     --light-color: color-mix(in srgb, var(--color) 20%, gray 20%);;
+    --dim: color-mix(in srgb, var(--color) 40%, var(--background));
 }
 * {
   -webkit-box-sizing: border-box;
@@ -56,25 +57,29 @@ body {
     position: relative;
     overflow: hidden;
 }
-svg > g, svg > path {
+svg g, svg path {
     fill: var(--color);
 }
 .icon-action.act-download svg,
-.icon-action.act-download svg > path{
+.icon-action.act-download svg path,
+.icon-action.act-download svg polyline,
+.icon-action.act-download svg line {
     stroke: var(--color);
     fill: transparent;
 }
 .icon-action:hover {
     background-color: var(--color);
 }
-.icon-action:hover svg > g,
-.icon-action:hover svg > path {
+.icon-action:hover svg g,
+.icon-action:hover svg path {
     fill: var(--background);
 }
 .icon-action.act-download:hover svg,
-.icon-action.act-download:hover svg > path{
+.icon-action.act-download:hover svg path,
+.icon-action.act-download:hover svg polyline,
+.icon-action.act-download:hover svg line {
     stroke: var(--background);
-    fill: var(--color);
+    fill: transparent;
 }
 .inp-uploader {
     opacity: 0;
@@ -444,3 +449,52 @@ svg > g, svg > path {
     transform: rotate(360deg);
   }
 }
+/* ── Crack button ─────────────────────────────────────────── */
+.table .col-action .act-crack { display: none; }
+.table .col-action.type-pcap .act-crack { display: inline-block; }
+/* ── Crack dialog ────────────────────────────────────────── */
+.crack-dict-label { margin-bottom: 4px; font-size: 11px; color: var(--color); }
+.crack-dict-select {
+    width: 100%;
+    margin-bottom: 6px;
+    padding: 3px 6px;
+    background-color: var(--background);
+    color: var(--color);
+    border: 1px solid var(--color);
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    outline: none;
+}
+.crack-dict-select:focus { border-color: var(--color); }
+.crack-dict-select option {
+    background-color: var(--background);
+    color: var(--color);
+}
+.crack-phase-run { margin-top: 2px; }
+.crack-bar-wrap {
+    height: 16px;
+    border: 1px solid var(--color);
+    position: relative;
+    margin-bottom: 4px;
+    overflow: hidden;
+}
+.crack-bar {
+    background-color: var(--light-color);
+    height: 100%;
+    width: 0%;
+    position: absolute;
+    top: 0; left: 0;
+}
+.crack-bar-pct {
+    position: absolute;
+    width: 100%;
+    text-align: center;
+    line-height: 16px;
+    font-size: 11px;
+    color: var(--color);
+}
+.crack-stats { font-size: 11px; color: var(--color); margin-bottom: 2px; }
+.crack-result { padding-top: 6px; font-weight: bold; color: var(--color); }
