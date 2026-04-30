@@ -905,6 +905,7 @@ function _crackSetPhase(phase) {
   $(".crack-phase-dict").classList.toggle("hidden", phase !== "dict");
   $(".crack-phase-run").classList.toggle("hidden", phase !== "run");
   $(".crack-result").classList.add("hidden");
+  if (phase === "dict") $(".crack-mode").classList.add("hidden");
   $(".act-crack-go").classList.toggle("hidden", phase !== "dict");
   $(".act-crack-stop").classList.toggle("hidden", phase !== "run");
   $(".act-crack-retry-save").classList.add("hidden");
@@ -1066,7 +1067,9 @@ async function runCrack(pcapPath) {
   _crackWorker.onmessage = function(e) {
     const msg = e.data;
     if (msg.type === "mode") {
-      $(".crack-mode").textContent = msg.mode === "wasm" ? "SIMD WASM" : "JS";
+      const el = $(".crack-mode");
+      el.textContent = msg.mode === "wasm" ? "SIMD WASM" : "JS";
+      el.classList.remove("hidden");
     } else if (msg.type === "progress") {
       const secs = Math.max((Date.now() - t0) / 1000, 0.001);
       const wps = Math.round(msg.tested / secs);
