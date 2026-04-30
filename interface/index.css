@@ -497,4 +497,5 @@ svg g, svg path {
     color: var(--color);
 }
 .crack-stats { font-size: 11px; color: var(--color); margin-bottom: 2px; }
+.crack-mode { display: inline-block; font-size: 10px; font-weight: bold; padding: 1px 5px; border-radius: 3px; background: var(--accent, #444); color: #fff; margin-top: 4px; opacity: 0.75; }
 .crack-result { padding-top: 6px; font-weight: bold; color: var(--color); }

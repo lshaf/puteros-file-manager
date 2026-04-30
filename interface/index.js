@@ -862,6 +862,7 @@ onmessage=async function(e){
   const hs=msg.hs,words=msg.words,total=words.length;
 
   const wasmOk=await _loadWasm();
+  postMessage({type:"mode",mode:wasmOk?'wasm':'js'});
 
   if(wasmOk){
     _wasmMem.set(hs.ssidBytes,_pSsid);
@@ -1064,7 +1065,9 @@ async function runCrack(pcapPath) {
 
   _crackWorker.onmessage = function(e) {
     const msg = e.data;
-    if (msg.type === "progress") {
+    if (msg.type === "mode") {
+      $(".crack-mode").textContent = msg.mode === "wasm" ? "SIMD WASM" : "JS";
+    } else if (msg.type === "progress") {
       const secs = Math.max((Date.now() - t0) / 1000, 0.001);
       const wps = Math.round(msg.tested / secs);
       const eta = wps > 0 ? Math.round((total - msg.tested) / wps) : 0;
