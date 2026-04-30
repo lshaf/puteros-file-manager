@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const port = 8080;
-const targetDomain = "http://192.168.18.36";
+const targetDomain = "http://192.168.18.10:8080";
 
 // Get folder from command line argument, default to 'interface'
 let folder = process.argv[2] || 'interface';
@@ -22,6 +22,7 @@ if (!fs.existsSync(mainFolderPath) || !fs.statSync(mainFolderPath).isDirectory()
 }
 
 http.createServer((req, res) => {
+  console.log(`[req] ${req.method} http://127.0.0.1:${port}${req.url}`);
   if (req.url.startsWith('/puteros/') || req.url.startsWith('/theme.css')) {
     let realUrl = req.url.replace('/puteros/', '/');
     const url = new URL(targetDomain + realUrl);
@@ -94,8 +95,9 @@ http.createServer((req, res) => {
     '.png': 'image/png',
     '.jpg': 'image/jpeg',
     '.gif': 'image/gif',
-    '.svg': 'image/svg+xml'
-  }[ext] || 'application/text';
+    '.svg': 'image/svg+xml',
+    '.wasm': 'application/wasm'
+  }[ext] || 'application/octet-stream';
 
   res.writeHead(200, {'Content-Type': mime});
 

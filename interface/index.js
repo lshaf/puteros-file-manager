@@ -833,16 +833,22 @@ function _tryPw(pw,hs){
   return true;
 }
 
-let _wasm=null,_wasmMem=null,_pPw,_pSsid,_pPrf,_pEapol,_pMic;
+let _wasm=null,_wasmMem=null,_pPw=[0,0,0,0],_pSsid,_pPrf,_pEapol,_pMic;
 
 async function _loadWasm(){
   try{
-    const r=await fetch('/crack.wasm');
+    const _wasmUrl='${(IS_DEV?location.origin+"/puteros":location.origin)}/crack.wasm';
+    const r=await fetch(_wasmUrl);
     if(!r.ok)return false;
     const {instance:inst}=await WebAssembly.instantiate(await r.arrayBuffer(),{});
     const e=inst.exports;
+    const required=['memory','wasm_pw0_buf','wasm_pw1_buf','wasm_pw2_buf','wasm_pw3_buf',
+                    'wasm_ssid_buf','wasm_prf_data_buf','wasm_eapol_buf','wasm_mic_buf',
+                    'wasm_try_passwords_batch'];
+    if(required.some(k=>!e[k]))return false;
     _wasmMem=new Uint8Array(e.memory.buffer);
-    _pPw=e.wasm_pw_buf();_pSsid=e.wasm_ssid_buf();
+    for(let b=0;b<4;b++) _pPw[b]=e['wasm_pw'+b+'_buf']();
+    _pSsid=e.wasm_ssid_buf();
     _pPrf=e.wasm_prf_data_buf();_pEapol=e.wasm_eapol_buf();_pMic=e.wasm_mic_buf();
     _wasm=e;return true;
   }catch(e){return false;}
@@ -869,19 +875,25 @@ onmessage=async function(e){
   }
 
   let tested=0,lastUpd=Date.now();
-  for(let i=0;i<total&&!_stop;i++){
-    let hit;
+  for(let i=0;i<total&&!_stop;){
     if(wasmOk){
-      const r=_enc.encodeInto(words[i],_PWBUF);
-      _wasmMem.set(_PWBUF.subarray(0,r.written),_pPw);
-      hit=_wasm.wasm_try_password(r.written,hs.ssidBytes.length,hs.eapol.length)!==0;
+      const batchStart=i;
+      const count=Math.min(4,total-batchStart);
+      const pl=[0,0,0,0];
+      for(let b=0;b<count;b++){
+        const r=_enc.encodeInto(words[batchStart+b],_PWBUF);
+        _wasmMem.set(_PWBUF.subarray(0,r.written),_pPw[b]);
+        pl[b]=r.written;
+      }
+      const hit=_wasm.wasm_try_passwords_batch(count,pl[0],pl[1],pl[2],pl[3],hs.ssidBytes.length,hs.eapol.length);
+      tested+=count;i+=count;
+      if(hit>=0){postMessage({type:"done",found:true,pw:words[batchStart+hit],tested:tested-count+hit+1});return;}
     }else{
-      hit=_tryPw(words[i],hs);
+      if(_tryPw(words[i],hs)){postMessage({type:"done",found:true,pw:words[i],tested:tested+1});return;}
+      tested++;i++;
     }
-    tested++;
     const now=Date.now();
     if(now-lastUpd>=150){lastUpd=now;postMessage({type:"progress",tested,total});await new Promise(r=>setTimeout(r,0));}
-    if(hit){postMessage({type:"done",found:true,pw:words[i],tested});return;}
   }
   postMessage({type:"done",found:false,stopped:_stop,tested});
 };
