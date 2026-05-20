@@ -17,9 +17,8 @@
     <header class="brand-bar">
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-            <path d="M2 2h12v12H2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
-            <path d="M5.5 5.5h5v5h-5z" fill="currentColor"/>
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
           </svg>
         </span>
         <span class="title" onclick="Dialog.show('info')" role="button" tabindex="0" aria-label="About Geek File Manager">
@@ -28,10 +27,6 @@
         </span>
       </div>
       <div class="session-bar">
-        <span class="status-chip" aria-hidden="true">
-          <span class="status-pip"></span>
-          <span class="status-chip-label">session</span>
-        </span>
         <button id="act-btn-logout" class="btn-action" type="button">logout</button>
       </div>
     </header>
@@ -42,7 +37,6 @@
          gets innerHTML overwritten with "used / total" each refresh,
          so we keep it free of children. -->
     <section class="panel storage-panel free-space" aria-label="Storage">
-      <span class="panel-label">storage</span>
       <span class="btn-action act-browse block-space free-sd active" data-path="/" role="button" tabindex="0" aria-label="Navigate to root">
         <span class="storage-stats">0 MB</span>
         <span class="storage-gauge" aria-hidden="true">
@@ -55,8 +49,6 @@
 
     <!-- ── 3.  NAVIGATOR PANEL  (path + toolbar) ─────────────────── -->
     <section class="panel nav-panel" aria-label="Navigator">
-      <span class="panel-label">navigator</span>
-
       <div class="path-bar">
         <span class="prompt-glyph" aria-hidden="true">$</span>
         <span class="current-path">Storage://</span>
@@ -91,60 +83,44 @@
 
     <!-- ── 4.  CONTENTS PANEL (file list) ────────────────────────── -->
     <section class="panel content-panel" aria-label="Directory contents">
-      <span class="panel-label">contents</span>
-      <div class="content">
-        <table class="table explorer">
-          <thead>
-            <tr>
-              <th class="col-name"   scope="col">name</th>
-              <th class="col-size"   scope="col">size</th>
-              <th class="col-action" scope="col">actions</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
+      <div class="explorer file-list" role="list"></div>
     </section>
 
   </div>
 
   <!-- ── FILE ROW TEMPLATE  (JS clones .file-row + .upload-loading) -->
   <template id="t">
-    <table>
-      <tbody>
-        <tr class="file-row">
-          <td class="col-name"></td>
-          <td class="col-size"></td>
-          <td class="col-action">
-            <button class="icon-action act-play" type="button" title="Run this file" aria-label="Run">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M8 5v14l11-7z"/>
-              </svg>
-            </button>
-            <a class="icon-action act-download" title="Download" aria-label="Download">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M12 3v13m-5-5 5 5 5-5M5 19h14"/>
-              </svg>
-            </a>
-            <button class="icon-action act-crack" type="button" title="Crack WPA2" aria-label="Crack WPA2">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
-              </svg>
-            </button>
-            <button class="icon-action act-oinput act-rename" type="button" data-action="" title="Rename" aria-label="Rename">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-              </svg>
-            </button>
-            <button class="icon-action act-delete" type="button" title="Delete" aria-label="Delete">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-              </svg>
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+    <div class="file-row" role="listitem">
+      <span class="col-name"></span>
+      <span class="col-size"></span>
+      <span class="col-action">
+        <button class="icon-action act-play" type="button" title="Run this file" aria-label="Run">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M8 5v14l11-7z"/>
+          </svg>
+        </button>
+        <a class="icon-action act-download" title="Download" aria-label="Download">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 3v13m-5-5 5 5 5-5M5 19h14"/>
+          </svg>
+        </a>
+        <button class="icon-action act-crack" type="button" title="Crack WPA2" aria-label="Crack WPA2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+          </svg>
+        </button>
+        <button class="icon-action act-oinput act-rename" type="button" data-action="" title="Rename" aria-label="Rename">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+          </svg>
+        </button>
+        <button class="icon-action act-delete" type="button" title="Delete" aria-label="Delete">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+          </svg>
+        </button>
+      </span>
+    </div>
     <div class="upload-loading">
       <span class="upload-name"></span>
       <div class="bar"></div>
@@ -203,9 +179,8 @@
         </span>
       </div>
       <div class="dialog-body">
-        <p class="muted">enter device password to continue</p>
         <label for="auth-password" class="oinput-label">password</label>
-        <input type="password" id="auth-password" autocomplete="current-password" spellcheck="false">
+        <input type="password" id="auth-password" autocomplete="off" spellcheck="false">
       </div>
       <div class="dialog-footer">
         <button class="btn-action act-auth-login" type="button">login</button>

@@ -4,7 +4,7 @@ const T = {
   master: $('#t'),
   fileRow: function () {
     const tmp = document.createElement('template');
-    tmp.innerHTML = this.master.content.querySelector('table tr.file-row').outerHTML;
+    tmp.innerHTML = this.master.content.querySelector('.file-row').outerHTML;
     return tmp.content;
   },
   uploadLoading: function () {
@@ -222,7 +222,7 @@ function calcHash(str) {
 }
 
 function renderFileRow(fileList) {
-  $("table.explorer tbody").innerHTML = "";
+  $(".explorer").innerHTML = "";
   let sortedList = fileList.split("\n").sort((a, b) => {
     return a.localeCompare(b);
   })
@@ -269,7 +269,7 @@ function renderFileRow(fileList) {
         e.querySelector(".col-action").innerHTML = "";
       }
     }
-    $("table.explorer tbody").appendChild(e);
+    $(".explorer").appendChild(e);
   });
 }
 
@@ -300,11 +300,15 @@ async function fetchSystemInfo() {
   let data = req.split("\n");
   let usedSpace = parseInt(data[2].split(":")[1]);
   let totalSpace = parseInt(data[3].split(":")[1]);
-  $(".free-space .free-sd span").innerHTML = `${formatBytes(usedSpace)} / ${formatBytes(totalSpace)}`;
+  const pct = totalSpace > 0 ? Math.min(100, usedSpace * 100 / totalSpace) : 0;
+  const pctLabel = pct >= 1 ? pct.toFixed(0) : pct.toFixed(2);
+  $(".free-space .free-sd span").innerHTML =
+    `${formatBytes(usedSpace)} / ${formatBytes(totalSpace)} · ${pctLabel}%`;
   const fill = document.querySelector(".storage-fill");
   if (fill) {
-    const pct = totalSpace > 0 ? Math.min(100, Math.round(usedSpace * 100 / totalSpace)) : 0;
-    fill.style.width = pct + "%";
+    // keep a visible sliver whenever there's any usage at all
+    const display = usedSpace > 0 ? Math.max(pct, 1.5) : 0;
+    fill.style.width = display + "%";
   }
   Dialog.loading.hide();
 }
@@ -367,7 +371,7 @@ $(".container").addEventListener("click", async (e) => {
   if (browseAction) {
     e.preventDefault();
     let path = browseAction.getAttribute("data-path")
-      || browseAction.closest("tr").getAttribute('data-path')
+      || browseAction.closest(".file-row").getAttribute('data-path')
       || "/";
     if (path === currentPath) return;
 
@@ -379,7 +383,7 @@ $(".container").addEventListener("click", async (e) => {
   if (editFileAction) {
     e.preventDefault();
     let editor = $(".dialog.editor .file-content");
-    let file = editFileAction.closest("tr").getAttribute("data-file");
+    let file = editFileAction.closest(".file-row").getAttribute("data-file");
     if (!file) return;
     $(".dialog.editor .editor-file-name").textContent = file;
     editor.value = "";
@@ -405,7 +409,7 @@ $(".container").addEventListener("click", async (e) => {
     let filePath = currentPath;
     let d = Dialog.showOneInput(action);
     if (action.startsWith("rename")) {
-      let row = oActionOInput.closest("tr");
+      let row = oActionOInput.closest(".file-row");
       filePath = row.getAttribute("data-file") || row.getAttribute("data-path");
     } else if (action === "serial") {
       filePath = "";
