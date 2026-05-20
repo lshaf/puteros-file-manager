@@ -301,6 +301,11 @@ async function fetchSystemInfo() {
   let usedSpace = parseInt(data[2].split(":")[1]);
   let totalSpace = parseInt(data[3].split(":")[1]);
   $(".free-space .free-sd span").innerHTML = `${formatBytes(usedSpace)} / ${formatBytes(totalSpace)}`;
+  const fill = document.querySelector(".storage-fill");
+  if (fill) {
+    const pct = totalSpace > 0 ? Math.min(100, Math.round(usedSpace * 100 / totalSpace)) : 0;
+    fill.style.width = pct + "%";
+  }
   Dialog.loading.hide();
 }
 

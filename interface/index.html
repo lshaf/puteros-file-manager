@@ -4,197 +4,267 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="dark light">
   <title>Geek File Manager</title>
   <link rel="stylesheet" href="/index.css">
   <link rel="stylesheet" href="/theme.css">
 </head>
 
 <body>
-  <div class="container">
-    <div class="header">
-      <div class="left-part">
-        <span class="title" onclick="Dialog.show('info')">Geek File Manager [<span class="puteros-version">beta</span>]</span>
+  <div class="container" role="application" aria-label="Geek File Manager">
+
+    <!-- ── 1.  BRAND BAR ────────────────────────────────────────── -->
+    <header class="brand-bar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2 2h12v12H2z" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M5.5 5.5h5v5h-5z" fill="currentColor"/>
+          </svg>
+        </span>
+        <span class="title" onclick="Dialog.show('info')" role="button" tabindex="0" aria-label="About Geek File Manager">
+          <span class="brand-name">geek<span class="brand-sep">_</span>file<span class="brand-sep">_</span>manager</span>
+          <span class="puteros-version">beta</span>
+        </span>
       </div>
-      <div class="right-part">
-        <button id="act-btn-logout" class="btn-action">Logout</button>
+      <div class="session-bar">
+        <span class="status-chip" aria-hidden="true">
+          <span class="status-pip"></span>
+          <span class="status-chip-label">session</span>
+        </span>
+        <button id="act-btn-logout" class="btn-action" type="button">logout</button>
       </div>
-    </div>
-    <div class="free-space">
-      <span class="btn-action act-browse block-space free-sd active" data-path="/">
-        Storage [<span>0 MB</span>]
+    </header>
+
+    <!-- ── 2.  STORAGE PANEL ──────────────────────────────────────
+         JS query: .free-space .free-sd span
+         The FIRST <span> descendant of .free-sd is the JS target — it
+         gets innerHTML overwritten with "used / total" each refresh,
+         so we keep it free of children. -->
+    <section class="panel storage-panel free-space" aria-label="Storage">
+      <span class="panel-label">storage</span>
+      <span class="btn-action act-browse block-space free-sd active" data-path="/" role="button" tabindex="0" aria-label="Navigate to root">
+        <span class="storage-stats">0 MB</span>
+        <span class="storage-gauge" aria-hidden="true">
+          <span class="storage-fill"></span>
+          <span class="storage-ticks"></span>
+        </span>
+        <span class="storage-hint" aria-hidden="true">tap to return to root</span>
       </span>
-    </div>
-    <div class="action-content">
-      <span class="breadcrumb">
-        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24">
-          <path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-        </svg>
+    </section>
+
+    <!-- ── 3.  NAVIGATOR PANEL  (path + toolbar) ─────────────────── -->
+    <section class="panel nav-panel" aria-label="Navigator">
+      <span class="panel-label">navigator</span>
+
+      <div class="path-bar">
+        <span class="prompt-glyph" aria-hidden="true">$</span>
         <span class="current-path">Storage://</span>
-      </span>
-      <div class="body-actions">
-        <button class="icon-action" title="Upload files to current folder">
-          <input type='file' class="inp-uploader" multiple autocomplete="off">
-          <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24">
+      </div>
+
+      <div class="body-actions" role="toolbar" aria-label="File operations">
+        <label class="icon-action" title="Upload files to current folder" aria-label="Upload files">
+          <input type="file" class="inp-uploader" multiple autocomplete="off">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5z"/>
           </svg>
-        </button>
-        <button class="icon-action" title="Upload folder to current folder">
-          <input type='file' class="inp-uploader" webkitdirectory directory multiple autocomplete="off">
-          <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24">
+        </label>
+        <label class="icon-action" title="Upload folder to current folder" aria-label="Upload folder">
+          <input type="file" class="inp-uploader" webkitdirectory directory multiple autocomplete="off">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 6h-8l-2-2H4C2.9 4 2 4.9 2 6v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2z"/>
             <path d="M12 9l-4 5h2.5v3h3v-3H16z"/>
           </svg>
-        </button>
-        <button class="icon-action act-oinput" data-action="createFile" title="Create new file">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        </label>
+        <button class="icon-action act-oinput" type="button" data-action="createFile" title="Create new file" aria-label="Create new file">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zm2 14h-3v3h-2v-3H8v-2h3v-3h2v3h3v2zm-3-7V3.5L18.5 9H13z"/>
           </svg>
         </button>
-        <button class="icon-action act-oinput" data-action="createFolder" title="Create new folder">
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        <button class="icon-action act-oinput" type="button" data-action="createFolder" title="Create new folder" aria-label="Create new folder">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M20 6h-8l-2-2H4c-1.11 0-2 .89-2 2v12c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-1 8h-3v3h-2v-3h-3v-2h3v-3h2v3h3v2z"/>
           </svg>
         </button>
       </div>
-    </div>
-    <div class="content">
-      <table class="table explorer">
-        <thead>
-          <tr>
-            <th class="col-name">Name</th>
-            <th class="col-size">Size</th>
-            <th class="col-action">Action</th>
-          </tr>
-        </thead>
-        <tbody>
+    </section>
 
-        </tbody>
-      </table>
-    </div>
+    <!-- ── 4.  CONTENTS PANEL (file list) ────────────────────────── -->
+    <section class="panel content-panel" aria-label="Directory contents">
+      <span class="panel-label">contents</span>
+      <div class="content">
+        <table class="table explorer">
+          <thead>
+            <tr>
+              <th class="col-name"   scope="col">name</th>
+              <th class="col-size"   scope="col">size</th>
+              <th class="col-action" scope="col">actions</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+
   </div>
+
+  <!-- ── FILE ROW TEMPLATE  (JS clones .file-row + .upload-loading) -->
   <template id="t">
     <table>
-      <tr class="path-row">
-        <td colspan="3">..</td>
-      </tr>
-      <tr class="file-row">
-        <td class="col-name"></td>
-        <td class="col-size"></td>
-        <td class="col-action">
-          <button class="icon-action act-play" title="Run this file">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z"/>
-            </svg>
-          </button>
-          <a class="icon-action act-download" title="Download">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 3v13m-5-5 5 5 5-5M5 19h14"/>
-            </svg>
-          </a>
-          <button class="icon-action act-crack" title="Crack WPA2">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
-              <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
-            </svg>
-          </button>
-          <button class="icon-action act-oinput act-rename" data-action="" title="Rename">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
-              <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
-            </svg>
-          </button>
-          <button class="icon-action act-delete" title="Delete">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
-              <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-            </svg>
-          </button>
-        </td>
-      </tr>
+      <tbody>
+        <tr class="file-row">
+          <td class="col-name"></td>
+          <td class="col-size"></td>
+          <td class="col-action">
+            <button class="icon-action act-play" type="button" title="Run this file" aria-label="Run">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+            </button>
+            <a class="icon-action act-download" title="Download" aria-label="Download">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 3v13m-5-5 5 5 5-5M5 19h14"/>
+              </svg>
+            </a>
+            <button class="icon-action act-crack" type="button" title="Crack WPA2" aria-label="Crack WPA2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12.65 10C11.83 7.67 9.61 6 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6c2.61 0 4.83-1.67 5.65-4H17v4h4v-4h2v-4H12.65zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+              </svg>
+            </button>
+            <button class="icon-action act-oinput act-rename" type="button" data-action="" title="Rename" aria-label="Rename">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </button>
+            <button class="icon-action act-delete" type="button" title="Delete" aria-label="Delete">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+              </svg>
+            </button>
+          </td>
+        </tr>
+      </tbody>
     </table>
     <div class="upload-loading">
       <span class="upload-name"></span>
       <div class="bar"></div>
     </div>
   </template>
-  <div class="dialog-background hidden">
-    <div class="dialog upload hidden">
-      <div class="dialog-head">Uploading</div>
+
+  <!-- ── DIALOGS ───────────────────────────────────────────────── -->
+  <div class="dialog-background hidden" role="presentation">
+
+    <div class="dialog upload hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-upload-title">
+      <div class="dialog-head">
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text" id="dlg-upload-title">uploading</span>
+      </div>
       <div class="dialog-body"></div>
     </div>
-    <div class="dialog info hidden">
-      <div class="dialog-head">Info</div>
-      <div class="dialog-body">
-        <p>You can also help develop the File Manager using <a href="https://github.com/lshaf/puteros-file-manager"
-            target="_blank">Geek File Manager</a> by <a href="https://github.com/lshaf" target="_blank">lshaf</a>.
-        </p>
-      </div>
-      <div class="dialog-footer">
-        <button class="btn-action act-dialog-close act-escape">Close</button>
-      </div>
-    </div>
-    <div class="dialog oinput hidden">
+
+    <div class="dialog info hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-info-title">
       <div class="dialog-head">
-        <span class="oinput-title">Rename</span>
-        <span class="oinput-file-name"></span>
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text" id="dlg-info-title">info</span>
       </div>
       <div class="dialog-body">
-        <label for="oinput-input" class="oinput-label">New name:</label>
-        <input type="text" id="oinput-input" autocomplete="off">
+        <p>You can also help develop the File Manager using
+          <a href="https://github.com/lshaf/puteros-file-manager" target="_blank" rel="noopener">Geek File Manager</a>
+          by <a href="https://github.com/lshaf" target="_blank" rel="noopener">lshaf</a>.</p>
       </div>
       <div class="dialog-footer">
-        <button class="btn-action act-save-oinput-file">Save</button>
-        <button class="btn-action act-dialog-close act-escape">Close</button>
+        <button class="btn-action act-dialog-close act-escape" type="button">close</button>
       </div>
     </div>
-    <div class="dialog auth hidden">
+
+    <div class="dialog oinput hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-oinput-title">
+      <div class="dialog-head" id="dlg-oinput-title">
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text">
+          <span class="oinput-title">rename</span>
+          <span class="oinput-file-name"></span>
+        </span>
+      </div>
+      <div class="dialog-body">
+        <label for="oinput-input" class="oinput-label">new name</label>
+        <input type="text" id="oinput-input" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-save-oinput-file" type="button">save</button>
+        <button class="btn-action act-dialog-close act-escape" type="button">close</button>
+      </div>
+    </div>
+
+    <div class="dialog auth hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-auth-title">
+      <div class="dialog-head" id="dlg-auth-title">
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text">
+          <span class="oinput-title">authentication</span>
+        </span>
+      </div>
+      <div class="dialog-body">
+        <p class="muted">enter device password to continue</p>
+        <label for="auth-password" class="oinput-label">password</label>
+        <input type="password" id="auth-password" autocomplete="current-password" spellcheck="false">
+      </div>
+      <div class="dialog-footer">
+        <button class="btn-action act-auth-login" type="button">login</button>
+      </div>
+    </div>
+
+    <div class="dialog crack hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-crack-title">
       <div class="dialog-head">
-        <span class="oinput-title">Authentication</span>
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text" id="dlg-crack-title">
+          crack: <span class="crack-file-name"></span>
+        </span>
       </div>
-      <div class="dialog-body">
-        <label for="oinput-input" class="oinput-label">Password:</label>
-        <input type="text" id="auth-password" autocomplete="off">
-      </div>
-      <div class="dialog-footer">
-        <button class="btn-action act-auth-login">Login</button>
-      </div>
-    </div>
-    <div class="dialog crack hidden">
-      <div class="dialog-head">Crack: <span class="crack-file-name"></span></div>
       <div class="dialog-body">
         <div class="crack-phase-dict">
-          <div class="crack-dict-label">Select dictionary:</div>
-          <select class="crack-dict-select"></select>
+          <div class="crack-dict-label">select dictionary</div>
+          <select class="crack-dict-select" aria-label="Dictionary"></select>
         </div>
         <div class="crack-phase-run hidden">
-          <div class="crack-bar-wrap">
+          <div class="crack-bar-wrap" role="progressbar" aria-valuemin="0" aria-valuemax="100">
             <div class="crack-bar"></div>
             <span class="crack-bar-pct">0%</span>
           </div>
           <div class="crack-stats"></div>
+          <div class="crack-mode hidden"></div>
         </div>
         <div class="crack-result hidden"></div>
-        <div class="crack-mode hidden"></div>
       </div>
       <div class="dialog-footer">
-        <button class="btn-action act-crack-go" disabled>Crack</button>
-        <button class="btn-action act-crack-stop hidden">Stop</button>
-        <button class="btn-action act-crack-retry-save hidden">Retry Save</button>
-        <button class="btn-action act-dialog-close act-escape">Close</button>
+        <button class="btn-action act-crack-go"          type="button" disabled>crack</button>
+        <button class="btn-action act-crack-stop hidden" type="button">stop</button>
+        <button class="btn-action act-crack-retry-save hidden" type="button">retry save</button>
+        <button class="btn-action act-dialog-close act-escape" type="button">close</button>
       </div>
     </div>
-    <div class="dialog editor hidden">
+
+    <div class="dialog editor hidden" role="dialog" aria-modal="true" aria-labelledby="dlg-editor-title">
       <div class="dialog-head">
-        Edit: <span class="editor-file-name"></span>
+        <span class="dlg-pips" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="dlg-head-text" id="dlg-editor-title">
+          edit: <span class="editor-file-name"></span>
+        </span>
       </div>
-      <textarea class="dialog-body file-content" style="resize: none;"></textarea>
+      <textarea class="dialog-body file-content" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
       <div class="dialog-footer">
-        <button class="btn-action act-save-edit-file" title="CTRL + S">Save</button>
-        <button class="btn-action act-dialog-close act-escape">Close</button>
+        <button class="btn-action act-save-edit-file"   type="button" title="CTRL + S">save</button>
+        <button class="btn-action act-dialog-close act-escape" type="button">close</button>
       </div>
     </div>
+
   </div>
-  <div class="loading-area hidden">
+
+  <div class="loading-area hidden" role="status" aria-live="polite">
     <div class="text"></div>
   </div>
-  <div class="upload-area hidden"></div>
+
+  <div class="upload-area hidden" aria-hidden="true"></div>
+
   <script src="/index.js"></script>
 </body>
+
 </html>
