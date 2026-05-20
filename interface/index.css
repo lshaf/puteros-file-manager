@@ -254,15 +254,6 @@ svg g, svg path { fill: var(--color); }
 .brand-sep { color: var(--text-soft); margin: 0 -1px; }
 .title:hover .brand-sep { color: var(--color); }
 .title:focus-visible { outline: 1px dashed var(--color); outline-offset: 4px; }
-.puteros-version {
-    font-size: 9px;
-    padding: 2px 6px;
-    border: 1px solid var(--color);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
-    opacity: 0.85;
-    font-weight: normal;
-}
 .session-bar {
     display: flex;
     align-items: center;
@@ -285,41 +276,41 @@ svg g, svg path { fill: var(--color); }
     50%      { opacity: 0.4; transform: scale(0.7); }
 }
 
-/* ── 2.  storage panel ────────────────────────────────────── */
-.storage-panel { padding: 10px 10px; }
-.free-space {
-    background: var(--tint-2);
-}
+/* ── 2.  storage panel — the whole panel IS the block ─────── */
+.storage-panel { padding: 0; }
+.free-space    { background: var(--tint-2); }
+.storage-panel:has(.free-sd.active) { background: var(--tint-8); }
+.storage-panel:has(.free-sd:hover)  { background: var(--tint-14); box-shadow: var(--glow); }
 .free-space .free-sd {
     display: grid;
     grid-template-columns: minmax(120px, max-content) 1fr auto;
     gap: 12px;
     align-items: center;
     width: 100%;
-    padding: 8px 12px;
-    border: 1px solid var(--border-faint);
-    background: var(--surface-1);
+    padding: 12px 14px;
+    border: 0;
+    background: transparent;
     text-transform: none;
     letter-spacing: 0;
     text-align: left;
     font-size: 11px;
 }
-.free-space .free-sd.active {
-    border-color: var(--color);
-    background: var(--surface-2);
-}
-/* neutralise btn-action invert on the storage card so the gauge stays visible */
+/* neutralise the generic .btn-action invert — the section paints the state */
+.free-space .btn-action.act-browse,
 .free-space .btn-action.act-browse.active,
-.free-space .btn-action.act-browse:hover:not(:disabled),
-.free-space .btn-action.act-browse.active > *,
-.free-space .btn-action.act-browse:hover:not(:disabled) > * {
-    background-color: var(--surface-2);
+.free-space .btn-action.act-browse:hover:not(:disabled) {
+    background-color: transparent;
     color: var(--color);
     box-shadow: none;
+    border: 0;
 }
-.free-space .btn-action.act-browse:hover:not(:disabled) {
-    border-color: var(--color);
-    box-shadow: var(--glow);
+/* children: clear the inherited invert color/bg, but keep their own borders
+   (e.g. .storage-gauge has its own 1px solid var(--color) frame) */
+.free-space .btn-action.act-browse.active > *,
+.free-space .btn-action.act-browse:hover:not(:disabled) > * {
+    background-color: transparent;
+    color: var(--color);
+    box-shadow: none;
 }
 .storage-stats {
     font-size: 13px;
@@ -331,7 +322,7 @@ svg g, svg path { fill: var(--color); }
 .storage-gauge {
     position: relative;
     height: 14px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--color);
     overflow: hidden;
     background: var(--tint-4);
 }
@@ -444,11 +435,14 @@ svg g, svg path { fill: var(--color); }
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 5px 14px;
+    min-height: 40px;
+    padding: 6px 14px;
     border-top: 1px solid color-mix(in srgb, var(--color) 12%, var(--background));
     transition: background-color var(--dur) var(--ease);
     position: relative;
 }
+.file-row.act-browse,
+.file-row.act-edit-file { cursor: pointer; }
 .file-row:first-child { border-top: 0; }
 .file-row:last-child  { border-bottom: 1px solid var(--border-faint); }
 .file-row:hover {
@@ -472,32 +466,24 @@ svg g, svg path { fill: var(--color); }
 .col-name.act-browse,
 .col-name.act-edit-file { cursor: pointer; }
 .col-name::before {
-    content: "[FIL]";
+    content: "[" attr(data-ext) "]";
     flex-shrink: 0;
     display: inline-block;
+    min-width: 44px;
+    text-align: center;
     font-size: 9px;
     padding: 2px 6px;
-    border: 1px solid var(--border-faint);
-    color: var(--text-soft);
-    letter-spacing: 0.18em;
+    border: 1px solid var(--color);
+    color: var(--color);
+    letter-spacing: 0.14em;
     line-height: 1;
-    background: var(--surface-1);
+    background: var(--tint-14);
     text-transform: uppercase;
 }
 .col-name.act-browse::before {
     content: "[DIR]";
-    color: var(--color);
-    border-color: var(--color);
-    background: var(--tint-14);
-}
-.file-row:has(.col-action.type-pcap) .col-name::before {
-    content: "[PCP]";
-    color: var(--color);
-    border-color: var(--color);
-    background: var(--tint-14);
 }
 .file-row:hover .col-name { color: var(--color); }
-.file-row:hover .col-name::before { border-color: var(--color); }
 
 /* size column: tabular-numeric, right-aligned, dimmed unless hovered */
 .col-size {
@@ -708,11 +694,20 @@ svg g, svg path { fill: var(--color); }
     display: flex;
     flex-direction: column;
 }
-.dialog.editor .dialog-body {
-    width: 100%;
-    background-color: var(--background);
-    border: 0;
+.dialog.editor .editor-stage {
     flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--background);
+    overflow: hidden;
+}
+.dialog.editor .editor-stage > * { flex: 1; min-height: 0; }
+.dialog.editor .file-content {
+    width: 100%;
+    background: var(--background);
+    color: var(--color);
+    border: 0;
     padding: 10px 12px;
     outline: 0;
     font-family: inherit;
@@ -720,6 +715,43 @@ svg g, svg path { fill: var(--color); }
     line-height: 1.55;
     tab-size: 2;
     resize: none;
+    display: block;
+}
+.dialog.editor .editor-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+    padding: 16px;
+    background:
+        repeating-conic-gradient(
+            color-mix(in srgb, var(--color) 5%, var(--background)) 0% 25%,
+            transparent 0% 50%) 0 / 16px 16px,
+        var(--background);
+}
+.dialog.editor .editor-image.hidden { display: none; }
+.dialog.editor .editor-img {
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    object-fit: contain;
+    image-rendering: pixelated;
+}
+.dialog.editor .editor-hex {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    overflow: auto;
+    white-space: pre;
+    color: var(--color);
+    background: var(--background);
+    letter-spacing: 0;
+    /* shrink to content width and center; cap at 100% so wide dumps scroll
+       horizontally instead of overflowing the dialog */
+    width: max-content;
+    max-width: 100%;
+    margin: 0 auto;
 }
 
 /* upload progress list */
@@ -845,6 +877,7 @@ svg g, svg path { fill: var(--color); }
 }
 
 /* ── crack dialog ─────────────────────────────────────────── */
+.dialog.crack { width: 100%; max-width: 640px; }
 .crack-dict-label {
     margin-bottom: 8px;
     font-size: 10px;
@@ -953,6 +986,20 @@ svg g, svg path { fill: var(--color); }
     margin-top: 8px;
     font-size: 12px;
     word-break: break-all;
+}
+.crack-save-status {
+    margin-top: 6px;
+    padding: 6px 10px;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    color: var(--text-soft);
+    border: 1px dashed var(--border-faint);
+    word-break: break-all;
+}
+.crack-save-status.crack-save-error {
+    color: var(--color);
+    border-color: var(--color);
+    background: var(--tint-4);
 }
 
 /* ── retained legacy dialogs (navigator / setting / status) ─ */

@@ -221,6 +221,15 @@ function calcHash(str) {
   return hash.toString(16).padStart(8, '0');
 }
 
+function _extChip(name) {
+  const dot = name.lastIndexOf('.');
+  const slash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+  // no extension, or the dot is the first char of the basename (dotfile)
+  if (dot < 0 || dot < slash || dot === slash + 1) return 'FIL';
+  const ext = name.slice(dot + 1).toUpperCase();
+  return ext.slice(0, 4) || 'FIL';
+}
+
 function renderFileRow(fileList) {
   $(".explorer").innerHTML = "";
   let sortedList = fileList.split("\n").sort((a, b) => {
@@ -244,10 +253,12 @@ function renderFileRow(fileList) {
     if (type === "FILE") {
       e = T.fileRow();
       e.querySelector('.file-row').setAttribute("data-file", dPath);
+      e.querySelector('.file-row').classList.add("act-edit-file");
       e.querySelector('.act-rename').setAttribute("data-action", "renameFile");
       e.querySelector(".col-name").classList.add("act-edit-file");
       e.querySelector(".col-name").textContent = name;
       e.querySelector(".col-name").setAttribute("title", name);
+      e.querySelector(".col-name").setAttribute("data-ext", _extChip(name));
       e.querySelector(".col-size").textContent = size;
       e.querySelector(".col-action").classList.add("type-file");
       if (name.toLowerCase().endsWith('.pcap')) e.querySelector(".col-action").classList.add("type-pcap");
@@ -260,6 +271,7 @@ function renderFileRow(fileList) {
       e = T.fileRow();
       e.querySelector(".col-name").classList.add("act-browse");
       e.querySelector('.file-row').setAttribute("data-path", dPath);
+      e.querySelector('.file-row').classList.add("act-browse");
       e.querySelector(".col-action").classList.add("type-folder");
       e.querySelector(".col-name").textContent = name;
       e.querySelector(".col-name").setAttribute("title", name);
@@ -294,6 +306,137 @@ function formatBytes(bytes) {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
 }
 
+// ── viewer: detect type, render image / hex / text ─────────
+const _TEXT_EXT = new Set([
+  "txt","md","markdown","rst","log","csv","tsv",
+  "json","yaml","yml","toml","ini","conf","cfg","env","properties",
+  "js","jsx","ts","tsx","mjs","cjs",
+  "html","htm","xml","css","scss","sass","less",
+  "sh","bash","zsh","fish","ps1","bat","cmd",
+  "py","rb","rs","go","java","kt","swift","php","pl","lua",
+  "c","cpp","cxx","cc","h","hpp","hxx",
+  "sql","graphql","gql",
+  "pass","license","readme","makefile","dockerfile","gitignore","editorconfig"
+]);
+const _IMAGE_EXT = new Set([
+  "jpg","jpeg","png","gif","webp","bmp","ico","avif","svg"
+]);
+function detectFileMode(filename) {
+  const lower = filename.toLowerCase();
+  const dot = lower.lastIndexOf('.');
+  const slash = Math.max(lower.lastIndexOf('/'), lower.lastIndexOf('\\'));
+  // no extension, or the dot is the first char of the basename (dotfile like ".env")
+  if (dot < 0 || dot < slash || dot === slash + 1) return 'text';
+  const ext = lower.slice(dot + 1);
+  if (_IMAGE_EXT.has(ext)) return 'image';
+  if (_TEXT_EXT.has(ext))  return 'text';
+  return 'hex';
+}
+
+function renderHex(buf, maxBytes = 64 * 1024) {
+  const N = Math.min(buf.length, maxBytes);
+  const lines = [];
+  for (let off = 0; off < N; off += 16) {
+    let hex = '', ascii = '';
+    for (let i = 0; i < 16; i++) {
+      const idx = off + i;
+      if (idx < N) {
+        const b = buf[idx];
+        hex += b.toString(16).padStart(2, '0') + (i === 7 ? '  ' : ' ');
+        ascii += (b >= 32 && b < 127) ? String.fromCharCode(b) : '.';
+      } else {
+        hex += '   ' + (i === 7 ? ' ' : '');
+        ascii += ' ';
+      }
+    }
+    lines.push(off.toString(16).padStart(8, '0') + '  ' + hex.trimEnd() + '  ' + ascii);
+  }
+  if (buf.length > maxBytes) {
+    lines.push('');
+    lines.push('... (' + (buf.length - maxBytes) + ' more bytes truncated)');
+  }
+  return lines.join('\n');
+}
+
+async function _fetchBinary(filePath) {
+  let url = `/download?file=${encodeURIComponent(filePath)}`;
+  if (IS_DEV) url = "/puteros" + url;
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  return new Uint8Array(await r.arrayBuffer());
+}
+
+async function openFile(filePath, forceMode) {
+  const dlg  = $(".dialog.editor");
+  // Remember the file's natural (auto-detected) mode on the first call so the
+  // "open as text" button can toggle back to it after the user switches to text.
+  if (!forceMode) {
+    dlg.setAttribute("data-natural-mode", detectFileMode(filePath));
+  }
+  const naturalMode = dlg.getAttribute("data-natural-mode") || 'text';
+  const mode = forceMode || naturalMode;
+
+  const ta   = $(".dialog.editor .file-content");
+  const img  = $(".dialog.editor .editor-img");
+  const imgWrap = $(".dialog.editor .editor-image");
+  const hex  = $(".dialog.editor .editor-hex");
+
+  dlg.setAttribute("data-mode", mode);
+  dlg.setAttribute("data-file", filePath);
+  $(".dialog.editor .editor-file-name").textContent = filePath;
+  $(".dialog.editor .editor-mode-label").textContent =
+    mode === 'text' ? 'edit' : (mode === 'image' ? 'view' : 'hex');
+
+  // reset all stages
+  ta.classList.add("hidden");
+  imgWrap.classList.add("hidden");
+  hex.classList.add("hidden");
+  ta.value = "";
+  ta.setAttribute("data-hash", calcHash(""));
+  img.removeAttribute("src");
+  hex.textContent = "";
+
+  // save: only meaningful in text mode
+  $(".act-save-edit-file").classList.toggle("hidden", mode !== 'text');
+  $(".act-save-edit-file").disabled = true;
+
+  // toggle button: only show when the file's natural mode isn't text;
+  // label flips depending on which side of the toggle we're on
+  const toggleBtn = $(".act-open-as-text");
+  if (naturalMode === 'text') {
+    toggleBtn.classList.add("hidden");
+  } else {
+    toggleBtn.classList.remove("hidden");
+    toggleBtn.textContent = mode === 'text'
+      ? `view as ${naturalMode}`
+      : 'open as text';
+  }
+
+  Dialog.loading.show('Fetching content...');
+  try {
+    if (mode === 'text') {
+      const r = await requestPost("/", { command: "cat", path: filePath });
+      ta.value = r;
+      ta.setAttribute("data-hash", calcHash(r));
+      ta.classList.remove("hidden");
+    } else if (mode === 'image') {
+      let url = `/download?file=${encodeURIComponent(filePath)}`;
+      if (IS_DEV) url = "/puteros" + url;
+      img.src = url;
+      imgWrap.classList.remove("hidden");
+    } else {
+      const buf = await _fetchBinary(filePath);
+      hex.textContent = renderHex(buf);
+      hex.classList.remove("hidden");
+    }
+    Dialog.loading.hide();
+    Dialog.show('editor');
+  } catch (err) {
+    Dialog.loading.hide();
+    alert("Failed to open file: " + err.message);
+  }
+}
+
 async function fetchSystemInfo() {
   Dialog.loading.show('Fetching system info...');
   let req = await requestPost("/", {command: "sysinfo"});
@@ -314,6 +457,9 @@ async function fetchSystemInfo() {
 }
 
 async function saveEditorFile() {
+  const dlg = $(".dialog.editor");
+  // image / hex modes are read-only — bail before we even spin the loader
+  if (dlg.getAttribute("data-mode") && dlg.getAttribute("data-mode") !== 'text') return;
   Dialog.loading.show('Saving...');
   let editor = $(".dialog.editor .file-content");
   let filename = $(".dialog.editor .editor-file-name").textContent.trim();
@@ -367,11 +513,14 @@ document.querySelectorAll(".inp-uploader").forEach((el) => {
 });
 
 $(".container").addEventListener("click", async (e) => {
+  // row-level click targets — skip when the click landed on an action button
+  const inActionCol = !!e.target.closest(".col-action");
+
   let browseAction = e.target.closest(".act-browse");
-  if (browseAction) {
+  if (browseAction && !inActionCol) {
     e.preventDefault();
     let path = browseAction.getAttribute("data-path")
-      || browseAction.closest(".file-row").getAttribute('data-path')
+      || browseAction.closest(".file-row")?.getAttribute('data-path')
       || "/";
     if (path === currentPath) return;
 
@@ -380,23 +529,11 @@ $(".container").addEventListener("click", async (e) => {
   }
 
   let editFileAction = e.target.closest(".act-edit-file");
-  if (editFileAction) {
+  if (editFileAction && !inActionCol) {
     e.preventDefault();
-    let editor = $(".dialog.editor .file-content");
     let file = editFileAction.closest(".file-row").getAttribute("data-file");
     if (!file) return;
-    $(".dialog.editor .editor-file-name").textContent = file;
-    editor.value = "";
-
-    // Load file content
-    Dialog.loading.show('Fetching content...');
-    let r = await requestPost("/", {command: "cat", path: file});
-    editor.value = r;
-    editor.setAttribute("data-hash", calcHash(r));
-
-    $(".act-save-edit-file").disabled = true;
-    Dialog.loading.hide();
-    Dialog.show('editor');
+    await openFile(file);
     return;
   }
 
@@ -488,6 +625,17 @@ $(".act-save-oinput-file").addEventListener("click", async (e) => {
 
 $(".act-save-edit-file").addEventListener("click", async (e) => {
   await saveEditorFile();
+});
+
+$(".act-open-as-text").addEventListener("click", async () => {
+  const dlg = $(".dialog.editor");
+  const file = dlg.getAttribute("data-file");
+  if (!file) return;
+  const current = dlg.getAttribute("data-mode");
+  const natural = dlg.getAttribute("data-natural-mode") || 'text';
+  // toggle between text and the file's natural mode
+  const next = current === 'text' ? natural : 'text';
+  await openFile(file, next);
 });
 
 $(".act-auth-login").addEventListener("click", async (e) => {
@@ -914,6 +1062,8 @@ function _crackSetPhase(phase) {
   $(".crack-phase-dict").classList.toggle("hidden", phase !== "dict");
   $(".crack-phase-run").classList.toggle("hidden", phase !== "run");
   $(".crack-result").classList.add("hidden");
+  $(".crack-save-status").classList.add("hidden");
+  $(".crack-save-status").textContent = "";
   if (phase === "dict") $(".crack-mode").classList.add("hidden");
   $(".act-crack-go").classList.toggle("hidden", phase !== "dict");
   $(".act-crack-stop").classList.toggle("hidden", phase !== "run");
@@ -939,6 +1089,10 @@ let _crackFoundPw = null;
 
 async function _saveCrack(pw) {
   $(".act-crack-retry-save").classList.add("hidden");
+  const status = $(".crack-save-status");
+  status.classList.remove("hidden");
+  status.classList.remove("crack-save-error");
+  status.textContent = "saving...";
   try {
     const fd = new FormData();
     fd.append("command", "saveCrack");
@@ -946,9 +1100,10 @@ async function _saveCrack(pw) {
     fd.append("pw", pw);
     const r = await fetch("/", { method: "POST", body: fd });
     if (!r.ok) throw new Error(await r.text());
-    $(".crack-result").textContent += "  [saved]";
+    status.textContent = "[saved]";
   } catch (err) {
-    $(".crack-result").textContent += "  [save failed: " + err.message + "]";
+    status.textContent = "[save failed: " + err.message + "]";
+    status.classList.add("crack-save-error");
     $(".act-crack-retry-save").classList.remove("hidden");
   }
 }
