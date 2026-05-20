@@ -286,7 +286,7 @@ svg g, svg path { fill: var(--color); }
 }
 
 /* ── 2.  storage panel ────────────────────────────────────── */
-.storage-panel { padding: 10px 16px; }
+.storage-panel { padding: 10px 10px; }
 .free-space {
     background: var(--tint-2);
 }
@@ -393,7 +393,7 @@ svg g, svg path { fill: var(--color); }
     display: flex;
     align-items: stretch;
     gap: 12px;
-    padding: 10px 16px;
+    padding: 10px 10px;
     flex-wrap: wrap;
 }
 .path-bar {
@@ -435,7 +435,7 @@ svg g, svg path { fill: var(--color); }
 }
 
 /* ── 4.  contents panel — flat tagged list (no table) ────── */
-.content-panel { padding: 10px 0 0; }
+.content-panel { padding: 0; }
 .explorer.file-list {
     display: flex;
     flex-direction: column;
